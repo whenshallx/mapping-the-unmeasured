@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f6f5f0"><meta name="description" content="Synthetic data methodology for Mapping the Unmeasured: current formulas, noise, assumptions and literature sources."><title>Synthetic Data Methodology — Mapping the Unmeasured</title><link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./vendor/katex/katex.min.css"><link rel="stylesheet" href="./methodology.css"></head>
+<body><a class="method-skip" href="#methodology">Skip to methodology</a><header class="method-header"><a class="method-brand" href="./">Mapping the Unmeasured</a><a class="method-return" href="./">← Back to the exhibit</a></header>
+<main id="methodology" class="method-document"><div class="method-tools"><span>METHODS / SYNTHETIC DATA</span><a href="./methodology.md" download>Download methodology ↓</a></div><details class="method-toc"><summary>Contents</summary><nav aria-label="Methodology sections"><a href="#section-1-purpose-and-scope">1. Purpose and scope</a>
+<a href="#section-2-input-space-and-data-conventions">2. Input space and data conventions</a>
+<a href="#section-3-definition-of-the-response">3. Definition of the response</a>
+<a href="#section-4-deterministic-conditional-mean-model">4. Deterministic conditional-mean model</a>
+<a href="#section-5-synthetic-observation-noise">5. Synthetic observation noise</a>
+<a href="#section-6-reproducible-numerical-example">6. Reproducible numerical example</a>
+<a href="#section-7-literature-basis-and-evidence-boundaries">7. Literature basis and evidence boundaries</a>
+<a href="#section-8-interpretation-of-regression-optimization-and-active-learning">8. Interpretation of regression, optimization, and active learning</a>
+<a href="#section-9-implementation-provenance-and-safeguards">9. Implementation, provenance, and safeguards</a>
+<a href="#section-10-version-history-and-superseded-proposals">10. Version history and superseded proposals</a>
+<a href="#section-11-limitations-and-future-calibration">11. Limitations and future calibration</a></nav></details><article><h1 id="section-synthetic-data-generation-methodology">Synthetic Data Generation Methodology</h1>
+<h2 id="section-mapping-the-unmeasured-compressive-strength-of-3d-printed-clay">Mapping the Unmeasured: Compressive Strength of 3D-Printed Clay</h2>
+<p><strong>English edition prepared:</strong> 30 October 2026<br><strong>Implemented generator:</strong> <code>clay-M1-v0.7</code><br><strong>Scenario:</strong> <code>illustrative_parallel_overlap_lognormal_cv20</code><br><strong>Dataset:</strong> 6,000 unique input configurations</p>
+<p>This document consolidates the current implementation described in the Chinese methodology (project file: <code>0_Dataset/Clay_Compressive_Strength_Synthetic_Y_Methodology.md</code>). The Chinese document retains successive revisions and earlier proposals. In this English edition, the current v0.7 method is presented first; superseded approaches are identified separately rather than mixed with the active specification.</p>
+<p>The source literature review was conducted on 25 October 2026. Its evidence assessments and access limitations are retained here; this edition does not constitute a new literature review.</p>
+<blockquote>
+<p>Web edition: project-file references below are provenance paths. The original research files are not bundled with this page.</p>
+</blockquote>
+<h2 id="section-1-purpose-and-scope">1. Purpose and scope</h2>
+<p>The dataset is a <strong>literature-informed, physics-guided synthetic benchmark</strong> for developing and demonstrating a regression–optimization–active learning framework. It provides a reproducible simulated relationship between material and printing parameters and an illustrative compressive-strength response.</p>
+<p>The labels are generated computationally. <strong>They are not physical test measurements, and the generator has not been calibrated or validated for the project&#39;s clay material.</strong> Literature motivates selected mechanisms and one external strength scale; it does not establish the complete seven-variable response function or the numerical values of the scenario coefficients.</p>
+<p>The benchmark can support:</p>
+<ul>
+<li>regression against a known simulated response;</li>
+<li>searches for parameter combinations with a specified predicted strength;</li>
+<li>comparisons of sequential sampling and active learning within a fixed synthetic world;</li>
+<li>educational exploration of model error and changing model behaviour as training samples are added.</li>
+</ul>
+<p>Performance on these data describes fidelity to the simulated world. It does not establish accuracy for real specimens, construction applications, or structural design.</p>
+<h2 id="section-2-input-space-and-data-conventions">2. Input space and data conventions</h2>
+<h3 id="section-2-1-seven-model-inputs">2.1 Seven model inputs</h3>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Dataset field</th>
+<th>Symbol</th>
+<th>Candidate values</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>State</code></td>
+<td>s</td>
+<td>Dried, Fired</td>
+<td>Material processing state</td>
+</tr>
+<tr>
+<td><code>Seams</code></td>
+<td>A</td>
+<td>Random, Aligned</td>
+<td>Seam arrangement; Random = 0, Aligned = 1 in the formula</td>
+</tr>
+<tr>
+<td><code>Walls</code></td>
+<td>N_w</td>
+<td>1, 2</td>
+<td>Number of perimeter wall paths</td>
+</tr>
+<tr>
+<td><code>Layer Height mm</code></td>
+<td>h</td>
+<td>1, 1.5, 2, 2.5, 3</td>
+<td>Layer height in mm</td>
+</tr>
+<tr>
+<td><code>Bead mm</code></td>
+<td>w</td>
+<td>3, 3.3, 3.6, 3.9, 4.2, 4.5</td>
+<td>Assumed deposited bead width in mm</td>
+</tr>
+<tr>
+<td><code>Infill Density</code></td>
+<td>D</td>
+<td>0.3, 0.5, 0.7, 0.9, 1</td>
+<td>Internal infill fraction</td>
+</tr>
+<tr>
+<td><code>Overlap</code></td>
+<td>o</td>
+<td>0.15, 0.35, 0.45, 0.65, 0.85, 1</td>
+<td>Project-defined overlap fraction</td>
+</tr>
+</tbody></table></div>
+<p>In the synthetic CSV and XLSX files, D and o are already stored as fractions between 0 and 1. They enter the calculation directly: <strong>do not divide them by 100 again</strong>. For example, 0.5 means 50%.</p>
+<p>The legacy <code>Original Design</code> worksheet uses percentage-valued input columns. Those values require a single division by 100 at that separate data-entry boundary. Unit interpretation follows the source schema, not a row-by-row guess based on magnitude.</p>
+<p>The explicit value lists must be used when reconstructing the grid. Some intervals are unequal; a single range and step cannot reproduce every level.</p>
+<h3 id="section-2-2-validity-constraint-and-configuration-count">2.2 Validity constraint and configuration count</h3>
+<p>The unconstrained Cartesian product contains:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>2</mn><mo>×</mo><mn>2</mn><mo>×</mo><mn>2</mn><mo>×</mo><mn>5</mn><mo>×</mo><mn>6</mn><mo>×</mo><mn>5</mn><mo>×</mo><mn>6</mn><mo>=</mo><mn>7,200</mn></mrow><annotation encoding="application/x-tex">2\times2\times2\times5\times6\times5\times6=7{,}200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">7</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">200</span></span></span></span></span></div>
+<p>configurations. The current project convention requires:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>D</mi><mo>=</mo><mn>1</mn><mspace width="1em"/><mo>⟹</mo><mspace width="1em"/><mi>o</mi><mo>=</mo><mn>1.</mn></mrow><annotation encoding="application/x-tex">D=1\quad\Longrightarrow\quad o=1.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6684em;vertical-align:-0.024em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⟹</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.4306em;"></span><span class="mord mathnormal">o</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">1.</span></span></span></span></span></div>
+<p>This is a project-specific parameter convention, not a universal rule for every slicer or printing process.</p>
+<p>For the full-infill rows, overlap was set to 1 and duplicate input configurations were removed. Deduplication used the complete input vector X, not Y; existing synthetic labels were not averaged. The resulting dataset contains:</p>
+<ul>
+<li>5,760 configurations with D &lt; 1;</li>
+<li>240 configurations with D = 1 and o = 1;</li>
+<li><strong>6,000 unique configurations in total</strong>.</li>
+</ul>
+<p>The current generator rejects D = 1 with o ≠ 1. Coverage of this discrete grid does not imply coverage of the continuous design space or establish that every candidate can be printed successfully.</p>
+<h3 id="section-2-3-fixed-geometry-and-protocol">2.3 Fixed geometry and protocol</h3>
+<p>Every synthetic row carries the following fixed geometry:</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Section Length mm</code></td>
+<td>80 mm</td>
+</tr>
+<tr>
+<td><code>Section Width mm</code></td>
+<td>80 mm</td>
+</tr>
+<tr>
+<td><code>Section Area mm2</code></td>
+<td>6,400 mm²</td>
+</tr>
+</tbody></table></div>
+<p>These are protocol constants, not additional model inputs. The generator checks consistency between the prescribed dimensions and area.</p>
+<p>Loading is recorded as <strong>parallel to the printing direction</strong>, as specified for this project. This does not establish the angle to the build axis, layer planes, or every individual infill segment. No additional direction multiplier is applied.</p>
+<p>The seven inputs do not encode the complete clay formulation, firing schedule, drying environment, infill topology, extrusion flow, printing speed, specimen height, or dimensional changes during drying and firing. The synthetic calculation does not resolve these missing physical conditions. Their real-world influence must not be inferred from this benchmark.</p>
+<h3 id="section-2-4-stable-sample-identifiers">2.4 Stable sample identifiers</h3>
+<p>The configurations are identified by <code>Sample ID</code>, from <code>CLAY-000001</code> to <code>CLAY-006000</code>. Identifiers were assigned once to the existing rows and remain attached to those configurations after sorting, filtering, or label regeneration.</p>
+<p>Sample identifiers are used for tracking and joining records. They are <strong>not model features</strong>, do not enter the strength equation, and do not determine the random-noise key. New configurations should receive unused identifiers rather than triggering renumbering of existing samples.</p>
+<h2 id="section-3-definition-of-the-response">3. Definition of the response</h2>
+<p>The intended physical quantity is gross-area apparent compressive strength:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>f</mi><mrow><mi>c</mi><mo separator="true">,</mo><mrow><mi mathvariant="normal">g</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">s</mi></mrow></mrow></msub><mo>=</mo><mfrac><msub><mi>F</mi><mi>max</mi><mo>⁡</mo></msub><msub><mi>A</mi><mrow><mi mathvariant="normal">g</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">s</mi><mo separator="true">,</mo><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">t</mi></mrow></msub></mfrac><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">f_{c,\mathrm{gross}}=\frac{F_{\max}}{A_{\mathrm{gross,test}}}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mpunct mtight">,</span><span class="mord mtight"><span class="mord mathrm mtight">gross</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.3324em;vertical-align:-0.9721em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight">gross</span><span class="mpunct mtight">,</span><span class="mord mathrm mtight">test</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">.</span></span></span></span></span></div>
+<p>With force in N and area in mm², the result is expressed in MPa. A real experiment would require the actual external loaded area at the time of testing. Gross-area strength must not be mixed with net-area strength, interlayer tensile strength, flexural strength, or foam plateau stress.</p>
+<p>The synthetic dataset uses a prescribed geometry and a hypothetical strength function; it does not derive its labels from measured failure forces. The use of MPa indicates the assumed numerical scale, not physical validation.</p>
+<p>The current implementation distinguishes:</p>
+<ul>
+<li><strong>μ(X):</strong> the deterministic conditional mean specified by the scenario;</li>
+<li><strong>Y(X):</strong> the stored synthetic observation, obtained by multiplying μ(X) by a reproducible random-noise factor.</li>
+</ul>
+<h2 id="section-4-deterministic-conditional-mean-model">4. Deterministic conditional-mean model</h2>
+<h3 id="section-4-1-approximate-material-fraction">4.1 Approximate material fraction</h3>
+<p>Perimeter wall thickness is approximated by:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>t</mi><mi>w</mi></msub><mo>=</mo><msub><mi>N</mi><mi>w</mi></msub><mi>w</mi><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">t_w=N_w w.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mord">.</span></span></span></span></span></div>
+<p>For a rectangular section of length L and width B, the perimeter-wall area fraction is:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>ϕ</mi><mi>w</mi></msub><mo>=</mo><mn>1</mn><mo>−</mo><mfrac><mrow><mo stretchy="false">(</mo><mi>L</mi><mo>−</mo><mn>2</mn><msub><mi>t</mi><mi>w</mi></msub><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mi>B</mi><mo>−</mo><mn>2</mn><msub><mi>t</mi><mi>w</mi></msub><mo stretchy="false">)</mo></mrow><mrow><mi>L</mi><mi>B</mi></mrow></mfrac><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\phi_w=1-\frac{(L-2t_w)(B-2t_w)}{LB}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.113em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">(</span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">2</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">2</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">.</span></span></span></span></span></div>
+<p>The approximate material fraction combines the perimeter walls with the internal infill:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>r</mi><mo>=</mo><msub><mi>ϕ</mi><mi>w</mi></msub><mo>+</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><msub><mi>ϕ</mi><mi>w</mi></msub><mo stretchy="false">)</mo><mi>D</mi><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">r=\phi_w+(1-\phi_w)D.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord">.</span></span></span></span></span></div>
+<p>For the prescribed L = B = 80 mm section, this becomes:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mi>r</mi><mo>=</mo><mn>1</mn><mo>−</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>D</mi><mo stretchy="false">)</mo><msup><mrow><mo fence="true">(</mo><mn>1</mn><mo>−</mo><mfrac><mrow><msub><mi>N</mi><mi>w</mi></msub><mi>w</mi></mrow><mn>40</mn></mfrac><mo fence="true">)</mo></mrow><mn>2</mn></msup><mi mathvariant="normal">.</mi></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{r=1-(1-D)\left(1-\frac{N_w w}{40}\right)^2.}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:3.284em;vertical-align:-1.29em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.994em;"><span style="top:-5.284em;"><span class="pstrut" style="height:5.284em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">40</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">.</span></span></span></span></span><span style="top:-3.994em;"><span class="pstrut" style="height:5.284em;"></span><span class="katex-stretchy fbox" style="height:3.284em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.29em;"><span></span></span></span></span></span></span></span></span></span></div>
+<p>The denominator 40 has units of mm and comes from half the section width. It is not a percentage-conversion factor.</p>
+<p>This geometric approximation assumes that wall thickness can be represented by wall count times bead width and that slicer infill is a usable proxy for internal material fraction. It does not account explicitly for neighbouring-wall overlap, infill intersections, top and bottom solid layers, microscopic bead porosity, cracking, or shrinkage. The condition</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>0</mn><mo>&lt;</mo><mn>2</mn><msub><mi>t</mi><mi>w</mi></msub><mo>&lt;</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>L</mi><mo separator="true">,</mo><mi>B</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">0&lt;2t_w&lt;\min(L,B)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6835em;vertical-align:-0.0391em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7944em;vertical-align:-0.15em;"></span><span class="mord">2</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord mathnormal">L</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mclose">)</span></span></span></span></span></div>
+<p>must hold. A more physical implementation would obtain deposited material geometry from the G-code or measured specimens and avoid double-counting overlapping paths.</p>
+<h3 id="section-4-2-material-state-strength-scale">4.2 Material-state strength scale</h3>
+<p>The dried-state scale is:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>F</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mo separator="true">,</mo><mi mathvariant="normal">D</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">d</mi></mrow></msub><mo>=</mo><mn>3.08</mn><mrow><mo fence="true">[</mo><mn>1</mn><mo>−</mo><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><mo>−</mo><mn>0.14</mn><mo>×</mo><mn>7</mn><mo stretchy="false">)</mo><mo fence="true">]</mo></mrow><mo>≈</mo><mn>1.924041816</mn><mtext> </mtext><mrow><mi mathvariant="normal">M</mi><mi mathvariant="normal">P</mi><mi mathvariant="normal">a</mi></mrow><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">F_{\mathrm{ref,Dried}}=3.08\left[1-\exp(-0.14\times7)\right]
+\approx1.924041816\ \mathrm{MPa}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight" style="margin-right:0.0778em;">ref</span><span class="mpunct mtight">,</span><span class="mord mathrm mtight">Dried</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3.08</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord">−</span><span class="mord">0.14</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">7</span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;">]</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord">1.924041816</span><span class="mspace"> </span><span class="mord"><span class="mord mathrm">MPa</span></span><span class="mord">.</span></span></span></span></span></div>
+<p>The adopted time-response expression is documented in the project literature review under <a href="https://doi.org/10.2174/0118748368499190260928170736">S1</a>. It originates from a different clay formulation and experimental protocol. Its use here is an <strong>assumed transfer of an external numerical scale</strong>, not calibration to the project&#39;s clay or specimen geometry.</p>
+<p>For the current illustrative scenario:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>F</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mo separator="true">,</mo><mi mathvariant="normal">F</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">d</mi></mrow></msub><mo>=</mo><mn>3</mn><msub><mi>F</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mo separator="true">,</mo><mi mathvariant="normal">D</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">d</mi></mrow></msub><mo>≈</mo><mn>5.772125447</mn><mtext> </mtext><mrow><mi mathvariant="normal">M</mi><mi mathvariant="normal">P</mi><mi mathvariant="normal">a</mi></mrow><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">F_{\mathrm{ref,Fired}}=3F_{\mathrm{ref,Dried}}
+\approx5.772125447\ \mathrm{MPa}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight" style="margin-right:0.0778em;">ref</span><span class="mpunct mtight">,</span><span class="mord mathrm mtight">Fired</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord">3</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight" style="margin-right:0.0778em;">ref</span><span class="mpunct mtight">,</span><span class="mord mathrm mtight">Dried</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord">5.772125447</span><span class="mspace"> </span><span class="mord"><span class="mord mathrm">MPa</span></span><span class="mord">.</span></span></span></span></span></div>
+<p>The factor of 3 is a deliberately selected scenario assumption. It is not an experimentally established firing benefit, a literature-derived universal multiplier, or a result learned from project measurements.</p>
+<p>F_ref is the multiplicative scale in the equation below. It should not be interpreted as the predicted strength of every full-infill configuration. The analytical normalization constants do not jointly define a valid full-infill row in the current grid: o = 0.35 is excluded when D = 1.</p>
+<h3 id="section-4-3-seam-overlap-and-layer-to-bead-ratio-terms">4.3 Seam, overlap, and layer-to-bead-ratio terms</h3>
+<p>Define:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>A</mi><mo>=</mo><mrow><mo fence="true">{</mo><mtable rowspacing="0.36em" columnalign="left left" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mn>0</mn><mo separator="true">,</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mtext>Random seams</mtext><mo separator="true">,</mo></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mn>1</mn><mo separator="true">,</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mtext>Aligned seams</mtext><mo separator="true">,</mo></mrow></mstyle></mtd></mtr></mtable></mrow><mspace width="2em"/><msub><mi>q</mi><mn>0</mn></msub><mo>=</mo><mfrac><mn>1.8</mn><mn>4.2</mn></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>7</mn></mfrac><mo separator="true">,</mo><mspace width="2em"/><msub><mi>o</mi><mn>0</mn></msub><mo>=</mo><mn>0.35.</mn></mrow><annotation encoding="application/x-tex">A=\begin{cases}0,&amp;\text{Random seams},\\1,&amp;\text{Aligned seams},\end{cases}
+\qquad q_0=\frac{1.8}{4.2}=\frac37,
+\qquad o_0=0.35.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:3em;vertical-align:-1.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">{</span></span><span class="mord"><span class="mtable"><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord">0</span><span class="mpunct">,</span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord">1</span><span class="mpunct">,</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:1em;"></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord text"><span class="mord">Random seams</span></span><span class="mpunct">,</span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord text"><span class="mord">Aligned seams</span></span><span class="mpunct">,</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">4.2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.8</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">7</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">0.35.</span></span></span></span></span></div>
+<p>The deterministic conditional mean is:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mi>μ</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>F</mi><mrow><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi></mrow><mo separator="true">,</mo><mi>s</mi></mrow></msub><mtext> </mtext><msup><mi>r</mi><mn>1.5</mn></msup><mi>exp</mi><mo>⁡</mo><mrow><mo fence="true">[</mo><mo>−</mo><mn>0.1</mn><mi>A</mi><mo>+</mo><mo stretchy="false">(</mo><mi>o</mi><mo>−</mo><mn>0.35</mn><mo stretchy="false">)</mo><mo>−</mo><msup><mrow><mo fence="true">(</mo><mfrac><mi>h</mi><mi>w</mi></mfrac><mo>−</mo><mfrac><mn>3</mn><mn>7</mn></mfrac><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo fence="true">]</mo></mrow><mi mathvariant="normal">.</mi></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\mu(X)=F_{\mathrm{ref},s}\,r^{1.5}
+\exp\left[-0.1A+(o-0.35)-\left(\frac{h}{w}-\frac37\right)^2\right].}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:3.68em;vertical-align:-1.59em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.09em;"><span style="top:-5.68em;"><span class="pstrut" style="height:5.68em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight" style="margin-right:0.0778em;">ref</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">s</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1.5</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">exp</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">[</span></span><span class="mord">−</span><span class="mord">0.1</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mopen">(</span><span class="mord mathnormal">o</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.35</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">7</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size4">]</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">.</span></span></span></span></span><span style="top:-4.09em;"><span class="pstrut" style="height:5.68em;"></span><span class="katex-stretchy fbox" style="height:3.68em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.59em;"><span></span></span></span></span></span></span></span></span></span></div>
+<p>All terms inside the exponential are dimensionless. The ratio h/w uses lengths expressed in the same unit.</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Parameter or term</th>
+<th>Current value or form</th>
+<th>Evidence boundary</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Material-fraction exponent</td>
+<td>1.5</td>
+<td>Uncalibrated structural scenario; not a validated clay exponent</td>
+</tr>
+<tr>
+<td>Aligned-seam term</td>
+<td>exp(−0.1 A)</td>
+<td>Assumes an approximately 9.5% reduction relative to Random at otherwise identical inputs</td>
+</tr>
+<tr>
+<td>Overlap term</td>
+<td>exp[o − 0.35]</td>
+<td>Assumes a continuous positive overlap response with coefficient 1</td>
+</tr>
+<tr>
+<td>Layer-ratio term</td>
+<td>exp[−(h/w − 3/7)²]</td>
+<td>Assumes a symmetric penalty around an analytical reference ratio</td>
+</tr>
+<tr>
+<td>Fired-to-dried scale ratio</td>
+<td>3</td>
+<td>Illustrative, uncalibrated state difference</td>
+</tr>
+</tbody></table></div>
+<p>The layer-height reference of 1.8 mm is not a level in the current candidate grid. It remains an analytical parameter; it is not presented as a sampled configuration or a demonstrated physical optimum.</p>
+<p>The overlap term is a <strong>relative correction</strong>, not solely a reduction factor: it equals 1 at o = 0.35 and exceeds 1 above that value. Geometry r is not increased separately by overlap, avoiding an additional unsupported material-area contribution.</p>
+<p>For otherwise fixed valid inputs with D &lt; 1:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi>μ</mi><mo stretchy="false">(</mo><msub><mi>o</mi><mn>2</mn></msub><mo stretchy="false">)</mo></mrow><mrow><mi>μ</mi><mo stretchy="false">(</mo><msub><mi>o</mi><mn>1</mn></msub><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>o</mi><mn>2</mn></msub><mo>−</mo><msub><mi>o</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\frac{\mu(o_2)}{\mu(o_1)}=\exp(o_2-o_1).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:2.363em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord">.</span></span></span></span></span></div>
+<p>For example, increasing o from 0.15 to 0.35 raises the conditional mean by about 22.14% within this scenario. This follows from the chosen coefficient, not a measured material effect. At D = 1, only o = 1 is admissible, so an overlap sweep at full infill is not part of the current valid dataset.</p>
+<p>The formula can represent larger wall fractions or infill fractions as stronger configurations, an aligned-seam penalty, an overlap response, and a preferred layer-to-bead ratio. These properties are imposed by construction. Recovering them with machine learning does not independently establish them as physical laws.</p>
+<h2 id="section-5-synthetic-observation-noise">5. Synthetic observation noise</h2>
+<h3 id="section-5-1-mean-preserving-multiplicative-lognormal-noise">5.1 Mean-preserving multiplicative lognormal noise</h3>
+<p>Each stored observation is generated as:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mi>Y</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mo>=</mo><mi>μ</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mi>exp</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mi>σ</mi><mi>Z</mi><mo>−</mo><mfrac><msup><mi>σ</mi><mn>2</mn></msup><mn>2</mn></mfrac><mo fence="true">)</mo></mrow><mo separator="true">,</mo><mspace width="2em"/><mi>Z</mi><mo>∼</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo><mo separator="true">,</mo></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{Y(X)=\mu(X)\exp\left(\sigma Z-\frac{\sigma^2}{2}\right),
+\qquad Z\sim\mathcal N(0,1),}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:3.1211em;vertical-align:-1.29em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8311em;"><span style="top:-5.1211em;"><span class="pstrut" style="height:5.1211em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">exp</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4911em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathcal" style="margin-right:0.1474em;">N</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mpunct">,</span></span></span></span></span><span style="top:-3.8311em;"><span class="pstrut" style="height:5.1211em;"></span><span class="katex-stretchy fbox" style="height:3.1211em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.29em;"><span></span></span></span></span></span></span></span></span></span></div>
+<p>with:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>σ</mi><mo>=</mo><msqrt><mrow><mi>ln</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><msup><mn>0.20</mn><mn>2</mn></msup><mo stretchy="false">)</mo></mrow></msqrt><mo>≈</mo><mn>0.19804220043536505.</mn></mrow><annotation encoding="application/x-tex">\sigma=\sqrt{\ln(1+0.20^2)}\approx0.19804220043536505.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.24em;vertical-align:-0.2561em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9839em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mop">ln</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.2</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-2.9439em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.28em" viewBox="0 0 400000 1296" preserveAspectRatio="xMinYMin slice"><path d="M263,681c0.7,0,18,39.7,52,119
+c34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120
+c340,-704.7,510.7,-1060.3,512,-1067
+l0 -0
+c4.7,-7.3,11,-11,19,-11
+H40000v40H1012.3
+s-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232
+c-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1
+s-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26
+c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z
+M1001 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2561em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">0.19804220043536505.</span></span></span></span></span></div>
+<p>The subtraction of σ²/2 preserves the conditional mean:</p>
+<div class="equation"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="double-struck">E</mi><mo stretchy="false">[</mo><mi>Y</mi><mo>∣</mo><mi>X</mi><mo stretchy="false">]</mo><mo>=</mo><mi>μ</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><mi mathvariant="normal">SD</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>Y</mi><mo>∣</mo><mi>X</mi><mo stretchy="false">)</mo><mo>=</mo><mn>0.20</mn><mtext> </mtext><mi>μ</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\mathbb E[Y\mid X]=\mu(X),
+\qquad
+\operatorname{SD}(Y\mid X)=0.20\,\mu(X).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathbb">E</span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mord mathrm">SD</span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.20</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mord">.</span></span></span></span></span></div>
+<p>The generated observations remain positive. The 20% value is a conditional coefficient of variation, <strong>not a ±20% bound</strong>; individual deviations can exceed 20%.</p>
+<p>Noise increases absolute variability at higher mean strengths. It represents an illustrative combination of unmodelled specimen variability and observation scatter. It is not a measured variability estimate and must not be attributed entirely to instrument error.</p>
+<h3 id="section-5-2-reproducibility-and-random-keys">5.2 Reproducibility and random keys</h3>
+<p>The current noise seed is:</p>
+<pre><code class="language-text">20261025
+</code></pre>
+<p>For each row, the generator constructs a canonical key from the seed, <code>State</code>, <code>Seams</code>, and the normalized numeric values of:</p>
+<pre><code class="language-text">Walls
+Layer Height mm
+Bead mm
+Infill Density
+Overlap
+Section Length mm
+Section Width mm
+Section Area mm2
+</code></pre>
+<p>It serializes this key using the implementation&#39;s JSON convention, hashes it with SHA-256, and uses the hash-derived integer to initialize a row-specific pseudorandom generator. One standard-normal draw supplies Z.</p>
+<p>Consequently:</p>
+<ul>
+<li>the same inputs, protocol values, seed, and implementation reproduce the same stored observation;</li>
+<li>sorting or selecting a subset of rows does not change their labels;</li>
+<li><code>Sample ID</code> does not change the noise realization;</li>
+<li>changing the seed defines another simulated realization, rather than another physical experiment.</li>
+</ul>
+<p>The seed must not be repeatedly selected to obtain a preferred ML score. The current dataset retains one observation per configuration. It does not simulate replicate tests, shared batch effects, or correlated process errors.</p>
+<h3 id="section-5-3-mean-response-versus-stored-observations">5.3 Mean response versus stored observations</h3>
+<p>The function <code>strength()</code> returns the deterministic conditional mean and its components. <code>noisy_strength()</code> returns the observation written to the dataset.</p>
+<p>Regeneration starts from μ(X), not from an already noisy label. This prevents accidental repeated multiplication of noise. The dataset does not add latent means, Z values, or noise multipliers as model inputs, which would leak information about the generated target.</p>
+<p>Monotonicity of the mean function does not guarantee monotonicity of individual noisy observations. Adding observation noise changes achievable prediction accuracy without increasing the complexity of the conditional-mean function.</p>
+<h2 id="section-6-reproducible-numerical-example">6. Reproducible numerical example</h2>
+<p>Consider this valid candidate configuration:</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>State</td>
+<td>Dried</td>
+</tr>
+<tr>
+<td>Seams</td>
+<td>Random</td>
+</tr>
+<tr>
+<td>Walls</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Layer height</td>
+<td>2 mm</td>
+</tr>
+<tr>
+<td>Bead width</td>
+<td>3.6 mm</td>
+</tr>
+<tr>
+<td>Infill density</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td>Overlap</td>
+<td>0.35</td>
+</tr>
+<tr>
+<td>Section</td>
+<td>80 × 80 mm</td>
+</tr>
+</tbody></table></div>
+<p>The implemented generator gives:</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Approximate wall thickness t_w</td>
+<td>3.6 mm</td>
+</tr>
+<tr>
+<td>Wall-area fraction φ_w</td>
+<td>0.171900</td>
+</tr>
+<tr>
+<td>Material fraction r</td>
+<td>0.585950</td>
+</tr>
+<tr>
+<td>Exponential process factor η</td>
+<td>0.9840043428</td>
+</tr>
+<tr>
+<td>Dried-state scale F_ref</td>
+<td>1.9240418155 MPa</td>
+</tr>
+<tr>
+<td>Conditional mean μ(X)</td>
+<td>0.8491850885 MPa</td>
+</tr>
+<tr>
+<td>Keyed standard-normal draw Z</td>
+<td>0.6144093732</td>
+</tr>
+<tr>
+<td>Noise multiplier</td>
+<td>1.1074594715</td>
+</tr>
+<tr>
+<td>Stored synthetic observation Y</td>
+<td>0.9404380693 MPa</td>
+</tr>
+</tbody></table></div>
+<p>These values were checked against the current Python implementation and configuration when preparing this edition. They illustrate the generator; they are not results from a compression test. The observation and latent mean are distinct quantities, so a model prediction need not exactly equal either one.</p>
+<h2 id="section-7-literature-basis-and-evidence-boundaries">7. Literature basis and evidence boundaries</h2>
+<p>The original review distinguishes:</p>
+<ul>
+<li><strong>A:</strong> measurements from the project&#39;s own material and protocol;</li>
+<li><strong>B:</strong> external evidence directly concerning clay compression;</li>
+<li><strong>C:</strong> structural analogies or evidence from other materials and response quantities;</li>
+<li><strong>D:</strong> uncalibrated scenario assumptions.</li>
+</ul>
+<p>The implemented generator is not calibrated using category-A measurements. Category-B or category-C mechanisms do not, by themselves, validate category-D numerical coefficients.</p>
+<p>The following references and assessments are carried over from the source review. Where full text was unavailable, that limitation remains; no additional validation is implied by inclusion in this document.</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Reference</th>
+<th>Role in the methodology</th>
+<th>Transfer limitation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>S1</td>
+<td>Rihani et al. (2026), <em>Toward Sustainable Clay-based Additive Manufacturing: Fresh-State and Hardened Mechanical Characterization of 3D-Printable Benjellik Clay Paste</em>. <a href="https://doi.org/10.2174/0118748368499190260928170736">DOI</a></td>
+<td>The source review records the drying-time expression 3.08[1 − exp(−0.14t)] MPa and seven-day compression results for an external clay.</td>
+<td>Different material and test conditions; the reported specimen size is 40 mm. It does not calibrate this project&#39;s 80 mm geometry or seven-variable response.</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>Nuryanta et al. (2025), <em>Optimization of Kaolin Clay Composition for Enhanced Mechanical Properties in 3D-Printed Structures</em>. <a href="https://doi.org/10.3390/constrmater5040083">DOI</a></td>
+<td>The source review records a reported maximum fired compressive strength of 6.14 MPa for a particular formulation; full conditions were not fully reviewed.</td>
+<td>A maximum from another material is not a reference mean and is not used to derive the factor of 3.</td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Donyadari, Ferruzca Ortiz and Khondoker (2024), <em>Optimization of Printing Parameters for Extrusion 3D Printing of Ceramic Clay</em>. <a href="https://doi.org/10.3390/engproc2024076047">DOI</a></td>
+<td>Motivates attention to coupling between layer height, bead geometry, flow, and printing quality.</td>
+<td>The source review did not identify compression data suitable for calibrating the present strength coefficients and flagged questionable density units or magnitudes.</td>
+</tr>
+<tr>
+<td>S4</td>
+<td>Ashby (2006), <em>The properties of foams and lattices</em>. <a href="https://doi.org/10.1098/rsta.2005.1678">DOI</a></td>
+<td>Motivates consideration of relative density, topology, and failure mode in candidate structural relationships.</td>
+<td>Foam or lattice scaling does not establish a universal exponent for dense printed clay. Some brittle relationships normalize by strut flexural strength rather than matrix compressive strength.</td>
+</tr>
+<tr>
+<td>S5</td>
+<td>Ryshkewitch (1953), <em>Compression Strength of Porous Sintered Alumina and Zirconia</em>. <a href="https://doi.org/10.1111/j.1151-2916.1953.tb12837.x">DOI</a></td>
+<td>A historical source for considering strength–microporosity relationships; the source review had abstract/bibliographic access rather than a full-text verification.</td>
+<td>Alumina and zirconia are not the project&#39;s clay. Bead microporosity is not equivalent to one minus slicer infill. No additional microporosity factor is applied in the current generator.</td>
+</tr>
+<tr>
+<td>S6</td>
+<td>de la Flor Juncal et al. (2024), <em>Influence of printing parameters on the durability of 3D-printed limestone calcined clay cement mortar: overlap between filaments and nozzle offset</em>. <a href="https://doi.org/10.1617/s11527-024-02451-6">DOI</a></td>
+<td>Supports considering contact geometry, interface voids, overlap, and deformation as possible mechanisms.</td>
+<td>LC3 cement mortar, durability responses, and millimetre-scale filament overlap do not supply a coefficient for this project&#39;s clay overlap fraction.</td>
+</tr>
+<tr>
+<td>S7</td>
+<td>Chen et al. (2020), <em>Effect of printing parameters on interlayer bond strength of 3D printed limestone-calcined clay-based cementitious materials: An experimental and numerical study</em>. <a href="https://doi.org/10.1016/j.conbuildmat.2020.120094">DOI</a></td>
+<td>Motivates attention to interface defects and process timing.</td>
+<td>Cementitious interlayer tensile behaviour is not bulk clay compression; seam alignment is not synonymous with an ordinary layer interface.</td>
+</tr>
+<tr>
+<td>S8</td>
+<td>Mamatha et al. (online 2019; issue 2020), <em>3D printing of cordierite honeycomb structures and evaluation of compressive strength under quasi-static condition</em>. <a href="https://doi.org/10.1111/ijac.13399">DOI</a></td>
+<td>Supports documenting cell topology and failure mode in ceramic compression studies.</td>
+<td>Different ceramic composition and structural geometry; no project-specific regression coefficients are transferred.</td>
+</tr>
+<tr>
+<td>S9</td>
+<td>Ji, Poullain and Leklou (2025), <em>Mechanical Properties of 3D-Printed Earth-Based Materials Considering Two Printable Soils</em>. <a href="https://doi.org/10.1061/JMCEE7.MTENG-19828">DOI</a></td>
+<td>Identified in the source review as a candidate for further direct earth-material evidence.</td>
+<td>Access limitations prevented adequate review; no numerical values or directional coefficients from this source are used.</td>
+</tr>
+</tbody></table></div>
+<p>The more detailed source-by-source record is available in the project evidence matrix (project file: <code>0_Dataset/research/clay_synthetic_strength/EVIDENCE_MATRIX.md</code>).</p>
+<h2 id="section-8-interpretation-of-regression-optimization-and-active-learning">8. Interpretation of regression, optimization, and active learning</h2>
+<p>The synthetic generator defines the simulated world. A regression model learns an approximation to its stored observations. Optimization or targeting searches that approximation for favourable or specified responses. Active learning chooses which synthetic configurations to label next.</p>
+<p>These activities should be described as <strong>simulated active learning</strong> when the queried labels come from the generator or a frozen synthetic lookup table.</p>
+<p>For meaningful comparisons:</p>
+<ol>
+<li>Keep the synthetic world, candidate pool, label-access policy, initial sample budget, and held-out evaluation procedure explicit.</li>
+<li>Keep duplicate or repeated configurations within the same split. A row identifier must not replace configuration-based grouping.</li>
+<li>Keep held-out test labels out of training, acquisition decisions, hyperparameter selection, and stopping decisions.</li>
+<li>Compare acquisition strategies under equal budgets; use repeated sampling seeds when assessing stability rather than relying on one trajectory.</li>
+<li>Distinguish model error against noisy observations from approximation error against the latent mean. Latent information is available to the simulator but must not leak into model inputs or acquisition unless explicitly permitted by the experiment design.</li>
+<li>Treat feature importance and SHAP values as explanations of the chosen synthetic world. A recovered seam penalty is not independent experimental evidence that real aligned seams are weaker.</li>
+</ol>
+<p>The 20% observation-noise setting is not a calibrated confidence interval. Likewise, alternative parameter scenarios are not calibrated uncertainty bounds for real clay. Agreement among models, or improved test scores after adding synthetic samples, does not remove uncertainty about the validity of the generator itself.</p>
+<h2 id="section-9-implementation-provenance-and-safeguards">9. Implementation, provenance, and safeguards</h2>
+<p>The current files, with paths relative to this document, are:</p>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Synthetic/generate_synthetic_y.py (project file: <code>0_Dataset/Synthetic/generate_synthetic_y.py</code>)</td>
+<td>Implements the conditional mean, keyed noise, input validation, and controlled label generation</td>
+</tr>
+<tr>
+<td>Synthetic/synthetic_y_config.json (project file: <code>0_Dataset/Synthetic/synthetic_y_config.json</code>)</td>
+<td>Records model version, scenario coefficients, protocol assumptions, noise distribution, and seed</td>
+</tr>
+<tr>
+<td>Synthetic/synthetic_y_generation_report.json (project file: <code>0_Dataset/Synthetic/synthetic_y_generation_report.json</code>)</td>
+<td>Records the generation procedure, checks, output hashes, and scenario provenance</td>
+</tr>
+<tr>
+<td>Synthetic/Synthetic_Dataset_6000.csv (project file: <code>0_Dataset/Synthetic/Synthetic_Dataset_6000.csv</code>)</td>
+<td>Current input configurations and synthetic strength observations</td>
+</tr>
+<tr>
+<td>Synthetic/Synthetic_Dataset_6000.xlsx (project file: <code>0_Dataset/Synthetic/Synthetic_Dataset_6000.xlsx</code>)</td>
+<td>Workbook counterpart of the synthetic dataset</td>
+</tr>
+</tbody></table></div>
+<p>The generator checks expected row count, required fields, finite inputs, supported state and seam categories, valid geometry, unique configurations, full-infill consistency, and nonblank unique sample identifiers when present. It rejects invalid values rather than silently clipping them.</p>
+<p>By default, it refuses to overwrite existing nonblank target values. Intentional replacement of known synthetic labels requires an explicit option. Outputs are staged and checked before replacement; prior files are backed up, and replacement failure triggers rollback.</p>
+<p><strong>The generator must not be used to overwrite physical measurements.</strong> Real observations should remain in a clearly identified field or separate dataset with their own experimental provenance.</p>
+<p>The following command is recorded for reproducibility; running it replaces existing synthetic labels and is not necessary to read this methodology or use the website:</p>
+<pre><code class="language-sh">python3 0_Dataset/Synthetic/generate_synthetic_y.py --replace-existing-synthetic
+</code></pre>
+<p>The implementation uses project-specific workbook-editing dependencies. The command is an implementation reference, not a claim that the script is dependency-free.</p>
+<h3 id="section-source-integrity-at-preparation-of-this-edition">Source integrity at preparation of this edition</h3>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>SHA-256</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Synthetic/generate_synthetic_y.py</code></td>
+<td><code>6b413472fbe00e33bd95bd50d6eb16c325a9267579badf415a75340d89f0386f</code></td>
+</tr>
+<tr>
+<td><code>Synthetic/synthetic_y_config.json</code></td>
+<td><code>3599da2f3ef14eeab281685958a632e21e70d2ff08c270fc7e9ca4722a33e3b6</code></td>
+</tr>
+<tr>
+<td><code>Synthetic/Synthetic_Dataset_6000.csv</code></td>
+<td><code>e79d5b712665ca6d30cf61bda7d20af7f27a41c350f18fd6e004c0515c6a5965</code></td>
+</tr>
+</tbody></table></div>
+<p>The generator is byte-identical to the frozen <code>label_generator.py</code> used by the adaptive-tuning branch. The CSV is byte-identical to that branch&#39;s frozen <code>source_data.csv</code> and the website&#39;s local reference copy, as checked during preparation.</p>
+<h2 id="section-10-version-history-and-superseded-proposals">10. Version history and superseded proposals</h2>
+<div class="table-scroll" role="region" aria-label="Methodology table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Meaning and status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Earlier M0 proposal</td>
+<td>A minimal-mechanism baseline with η = 1 and alternative density exponents. Useful for sensitivity analysis, but not the active label generator.</td>
+</tr>
+<tr>
+<td>Earlier M1 proposal</td>
+<td>Included a one-sided low-overlap term proportional to (1 − D) max(o₀ − o, 0), with no default nonzero observation noise. Superseded for the current dataset.</td>
+</tr>
+<tr>
+<td>Geometry update</td>
+<td>Set the project&#39;s prescribed section to 80 × 80 mm. It did not establish specimen height, shrinkage correction, or a calibrated size effect.</td>
+</tr>
+<tr>
+<td>Fraction-valued 7,200-row grid</td>
+<td>Used explicit input levels with D and o stored as fractions. This describes the earlier unconstrained grid, not the final dataset count.</td>
+</tr>
+<tr>
+<td>v0.6 mean response</td>
+<td>Adopted the continuous exp[o − 0.35] overlap correction, the fixed loading-direction description, and the current illustrative state scales and process coefficients. This is the mean-response basis retained in v0.7.</td>
+</tr>
+<tr>
+<td>Full-infill constraint and deduplication</td>
+<td>Required D = 1 to have o = 1 and reduced the candidate set to 6,000 unique configurations.</td>
+</tr>
+<tr>
+<td>v0.7 observation labels</td>
+<td>Added mean-preserving multiplicative lognormal noise with conditional CV = 20% and seed 20261025. This is the current stored-label scenario.</td>
+</tr>
+<tr>
+<td>Sample identifiers, 26 October 2026</td>
+<td>Added stable <code>Sample ID</code> values without changing the response equation or noise key.</td>
+</tr>
+</tbody></table></div>
+<p>Earlier statements that targets were blank, that no generator script existed, or that the dataset contained 7,200 rows describe historical stages. They do not describe the implemented v0.7 dataset. Likewise, an earlier illustrative loading direction or an earlier overlap equation must not be combined with the current specification as though they were simultaneously active.</p>
+<h2 id="section-11-limitations-and-future-calibration">11. Limitations and future calibration</h2>
+<p>The generator assumes a particular relationship between wall geometry, infill, seam arrangement, layer ratio, overlap, and material state. Its coefficients, external-scale transfer, fired multiplier, and observation variability remain uncalibrated for the project&#39;s clay.</p>
+<p>A physically grounded follow-up would require controlled compression tests, documented actual geometry and loading conditions, replicated specimens to estimate variability, and independent data to assess generalization. Useful matched comparisons include full versus partial infill, dried versus fired states, aligned versus random seams under otherwise matched printing conditions, and controlled changes in layer geometry and overlap.</p>
+<p>Initial calibration should constrain the strength scale and structural relationship before adding more defect coefficients. Real measurements used for final independent evaluation should not also be used to select synthetic assumptions or tune the predictive model.</p>
+<p><strong>Educational-use statement:</strong> This methodology and the associated application demonstrate a regression–optimization–active learning framework. Synthetic labels, model predictions, and suggested parameter combinations must not be used to guide real-world construction, structural design, or other safety-critical applications.</p>
+<p>For questions, contact <a href="mailto:w.xiang@student.tudelft.nl">w.xiang@student.tudelft.nl</a>.</p>
+</article></main>
+<footer class="method-footer"><a href="./">Return to the interactive exhibit ↗</a><span>Educational purposes only</span></footer></body></html>

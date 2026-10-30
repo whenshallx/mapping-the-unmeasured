@@ -1,3 +1,4 @@
+import {bindDisclaimer} from './disclaimer.js';
 import {api as browserAPI,bindDownloads} from './browser-api.js';
 import { createHero } from './hero.js';
 
@@ -314,6 +315,7 @@ async function changeSession(action) {
 }
 
 function bindEvents() {
+  bindDisclaimer();
   $$('.mode-tab').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
   $('.mode-tabs').addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;

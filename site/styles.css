@@ -2235,3 +2235,27 @@ h1 em {
   .model-comparison > .eyebrow { font-size:8px; }
   .stage-metric-grid span { font-size:10px; }
 }
+
+/* Project information stays in the existing page footer. */
+.site-footer-links { display:flex; align-items:center; gap:22px; }
+.site-footer-links button,.site-footer-links a { font:10px 'Consolas',monospace; color:#66715f; letter-spacing:0; padding:7px 0; text-decoration:underline; text-underline-offset:3px; }
+.site-footer-links button:hover,.site-footer-links a:hover { color:var(--green); }
+.disclaimer-dialog { position:fixed; inset:0; margin:auto; width:calc(100% - 40px); max-width:620px; max-height:calc(100dvh - 48px); overflow-y:auto; box-sizing:border-box; padding:38px 42px 30px; border:1px solid var(--line); background:var(--panel); color:var(--ink); box-shadow:0 18px 70px #28352a26; }
+.disclaimer-dialog::backdrop { background:#1f2b243d; backdrop-filter:blur(2px); }
+.disclaimer-close { position:absolute; top:12px; right:12px; margin:0; }
+.disclaimer-close button { width:36px; height:36px; font-size:24px; }
+.disclaimer-dialog > .eyebrow { font:10px 'Consolas',monospace; letter-spacing:.5px; color:var(--muted); }
+.disclaimer-dialog h2 { font:400 40px/1.15 var(--serif); letter-spacing:-1px; margin:24px 0; }
+.disclaimer-dialog p { font:14px/1.8 var(--sans); color:#596350; margin:0 0 20px; }
+.disclaimer-dialog strong { color:var(--ink); font-weight:600; }
+.disclaimer-dialog a { color:var(--green); text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.disclaimer-dialog .disclaimer-contact { margin-top:26px; }
+.disclaimer-dialog .disclaimer-signature { font-family:'Consolas',monospace; color:var(--ink); margin-bottom:0; }
+@media(max-width:760px) {
+  .site-footer { flex-wrap:wrap; gap:6px 16px; }
+  .site-footer-links { gap:18px; }
+  .site-footer-links button,.site-footer-links a { display:inline-flex; align-items:center; min-height:44px; padding:0; font-size:11px; }
+  .disclaimer-dialog { padding:30px 25px 26px; max-height:calc(100dvh - 32px); }
+  .disclaimer-dialog h2 { font-size:34px; }
+  .disclaimer-close button { min-width:44px; min-height:44px; }
+}

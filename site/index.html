@@ -77,10 +77,19 @@
           </div>
         </aside>
       </main>
-      <footer class="site-footer"><span>Mapping the Unmeasured</span><span>XGBOOST · UMAP · ACTIVE LEARNING</span></footer>
+      <footer class="site-footer"><span>Mapping the Unmeasured</span><nav class="site-footer-links" aria-label="Project information"><button id="disclaimer-open" type="button" aria-haspopup="dialog">Disclaimer</button><a href="./methodology.html" target="_blank" rel="noopener">Methodology ↗</a></nav><span>XGBOOST · UMAP · ACTIVE LEARNING</span></footer>
     </div>
 
     <div class="drawer-backdrop" id="drawer-backdrop" hidden></div><aside class="history-drawer" id="history-drawer" aria-labelledby="history-title" aria-modal="true" role="dialog" hidden><div class="drawer-heading"><div><span class="eyebrow">A RECORD OF THE PROCESS</span><h2 id="history-title">Learning history</h2></div><button class="icon-button" type="button" id="history-close" aria-label="Close learning history">×</button></div><div class="drawer-content"><div class="history-current"><span class="eyebrow">CURRENT TRAINING SET</span><strong><span id="history-n">120</span><small>samples</small></strong><a class="secondary-button" id="data-download" href="/api/download" download>Download training data <span aria-hidden="true">↓</span></a></div><div class="metrics-heading"><h3>How the model is learning</h3><span>FIXED EVALUATION SET</span></div><div class="metric-pair"><div><span>RMSE / MPa</span><strong id="metric-rmse">—</strong><small>Lower is better</small></div><div><span>R²</span><strong id="metric-r2">—</strong><small>Higher is better</small></div><div><span>MAE / MPa</span><strong id="metric-mae">—</strong><small>Lower is better</small></div></div><div class="learning-chart" id="learning-chart" aria-label="RMSE learning curve"></div><div class="history-list" id="history-list"></div><div class="session-actions"><h3>Begin again</h3><p>Every exploration starts with the n = 120 model. Your selected stage is saved when you return.</p><button id="new-session" class="secondary-button" type="button">Start a new exploration <span aria-hidden="true">↗</span></button><button id="clear-session" class="text-button danger-button" type="button">Return to the n = 120 model</button><div class="form-error" id="session-error" role="alert" hidden></div></div></div></aside>
+    <dialog id="disclaimer-dialog" class="disclaimer-dialog" aria-labelledby="disclaimer-title">
+      <form method="dialog" class="disclaimer-close"><button class="icon-button" type="submit" aria-label="Close disclaimer" autofocus>×</button></form>
+      <span class="eyebrow">Mapping the Unmeasured</span>
+      <h2 id="disclaimer-title">Disclaimer</h2>
+      <p>This model is trained on <strong>synthetic data</strong>. Details of the data generation method are available here: <a href="./methodology.html" target="_blank" rel="noopener">Data generation methodology ↗</a>.</p>
+      <p>The application demonstrates a <strong>regression–optimization–active learning framework</strong> and is intended for <strong>educational purposes only</strong>. Its predictions and suggested parameter combinations must not be used to guide real-world construction, structural design, or other safety-critical applications.</p>
+      <p class="disclaimer-contact">Feel free to reach out :)<br /><a href="mailto:w.xiang@student.tudelft.nl">w.xiang@student.tudelft.nl</a></p>
+      <p class="disclaimer-signature">W. Xiang</p>
+    </dialog>
     <div class="toast" id="toast" role="status" hidden></div>
   </body>
 </html>
