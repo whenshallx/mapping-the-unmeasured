@@ -1,4 +1,4 @@
-import {bindDisclaimer} from './disclaimer.js';
+import {bindDisclaimer} from './disclaimer.js?v=disclaimer-header-2';
 import {api as browserAPI,bindDownloads} from './browser-api.js';
 import { createHero } from './hero.js';
 
