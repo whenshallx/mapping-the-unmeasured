@@ -1,4 +1,4 @@
-const CACHE='mapping-4f417c90f232';
+const CACHE='mapping-8f5eca1f8235';
 self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('mapping-')&&key!==CACHE)await caches.delete(key);await self.clients.claim();})()));
 self.addEventListener('install',()=>self.skipWaiting());
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;event.respondWith((async()=>{const cache=await caches.open(CACHE);try{const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;}catch(error){const saved=await cache.match(event.request);if(saved)return saved;throw error;}})());});
+self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;event.respondWith((async()=>{const cache=await caches.open(CACHE);try{const url=new URL(event.request.url);const fresh=event.request.mode==='navigate'||url.pathname.endsWith('/methodology.md');const response=await fetch(event.request,fresh?{cache:'no-cache'}:{});if(response.ok)await cache.put(event.request,response.clone());return response;}catch(error){const saved=await cache.match(event.request);if(saved)return saved;throw error;}})());});
