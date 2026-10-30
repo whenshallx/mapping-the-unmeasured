@@ -2259,3 +2259,17 @@ h1 em {
   .disclaimer-dialog h2 { font-size:34px; }
   .disclaimer-close button { min-width:44px; min-height:44px; }
 }
+
+/* Keep the disclaimer discoverable without scrolling the conversation. */
+.header-actions { display:flex; align-items:center; gap:24px; margin-left:auto; flex-shrink:0; }
+.header-actions .history-trigger { margin-left:0; white-space:nowrap; }
+.header-disclaimer { color:var(--green); font-size:12px; min-height:44px; text-decoration:underline; text-underline-offset:4px; }
+@media(max-width:760px) {
+  .header-actions { gap:14px; }
+  .header-disclaimer { font-size:11px; }
+}
+@media(max-width:380px) {
+  .site-header { padding:0 14px; gap:10px; }
+  .wordmark { font-size:12px; }
+  .header-actions { gap:10px; }
+}
