@@ -54,3 +54,11 @@ td code { font-size:12px; }
   .method-footer { padding:20px; flex-wrap:wrap; }
 }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+
+/* The contents are visible at the start of the document, matching the download. */
+.method-toc { padding:24px 0; margin:30px 0 44px; }
+.method-toc h2 { font-size:24px; margin:0 0 18px; }
+.method-toc ul { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 26px; margin:0; padding:0; list-style:none; }
+.method-toc li { margin:0; line-height:1.5; }
+.method-toc a:hover { text-decoration:underline; }
+@media(max-width:640px) { .method-toc ul { grid-template-columns:1fr; gap:12px; } }

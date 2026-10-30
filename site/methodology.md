@@ -2,20 +2,23 @@
 
 ## Mapping the Unmeasured: Compressive Strength of 3D-Printed Clay
 
-**English edition prepared:** 30 October 2026  
-**Implemented generator:** `clay-M1-v0.7`  
-**Scenario:** `illustrative_parallel_overlap_lognormal_cv20`  
-**Dataset:** 6,000 unique input configurations
+## Table of contents
 
-This document consolidates the current implementation described in the Chinese methodology (project file: `0_Dataset/Clay_Compressive_Strength_Synthetic_Y_Methodology.md`). The Chinese document retains successive revisions and earlier proposals. In this English edition, the current v0.7 method is presented first; superseded approaches are identified separately rather than mixed with the active specification.
-
-The source literature review was conducted on 25 October 2026. Its evidence assessments and access limitations are retained here; this edition does not constitute a new literature review.
-
-> Web edition: project-file references below are provenance paths. The original research files are not bundled with this page.
+- [1. Purpose and scope](#1-purpose-and-scope)
+- [2. Input space and data conventions](#2-input-space-and-data-conventions)
+- [3. Definition of the response](#3-definition-of-the-response)
+- [4. Deterministic conditional-mean model](#4-deterministic-conditional-mean-model)
+- [5. Synthetic observation noise](#5-synthetic-observation-noise)
+- [6. Reproducible numerical example](#6-reproducible-numerical-example)
+- [7. Literature basis and evidence boundaries](#7-literature-basis-and-evidence-boundaries)
+- [8. Interpretation of regression, optimization, and active learning](#8-interpretation-of-regression-optimization-and-active-learning)
+- [9. Implementation, provenance, and safeguards](#9-implementation-provenance-and-safeguards)
+- [10. Version history and superseded proposals](#10-version-history-and-superseded-proposals)
+- [11. Limitations and future calibration](#11-limitations-and-future-calibration)
 
 ## 1. Purpose and scope
 
-The dataset is a **literature-informed, physics-guided synthetic benchmark** for developing and demonstrating a regression–optimization–active learning framework. It provides a reproducible simulated relationship between material and printing parameters and an illustrative compressive-strength response.
+The dataset is a **literature-informed, physics-guided synthetic benchmark** for developing and demonstrating a regression–optimization–active learning proof of concept framework. It provides a reproducible simulated relationship between material and printing parameters and an illustrative compressive-strength response.
 
 The labels are generated computationally. **They are not physical test measurements, and the generator has not been calibrated or validated for the project's clay material.** Literature motivates selected mechanisms and one external strength scale; it does not establish the complete seven-variable response function or the numerical values of the scenario coefficients.
 
@@ -415,6 +418,6 @@ A physically grounded follow-up would require controlled compression tests, docu
 
 Initial calibration should constrain the strength scale and structural relationship before adding more defect coefficients. Real measurements used for final independent evaluation should not also be used to select synthetic assumptions or tune the predictive model.
 
-**Educational-use statement:** This methodology and the associated application demonstrate a regression–optimization–active learning framework. Synthetic labels, model predictions, and suggested parameter combinations must not be used to guide real-world construction, structural design, or other safety-critical applications.
+**Educational-use statement:** This methodology and the associated application demonstrate a regression–optimization–active learning proof of concept framework. Synthetic labels, model predictions, and suggested parameter combinations must not be used to guide real-world construction, structural design, or other safety-critical applications.
 
 For questions, contact [w.xiang@student.tudelft.nl](mailto:w.xiang@student.tudelft.nl).
